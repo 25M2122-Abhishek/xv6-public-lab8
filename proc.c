@@ -613,17 +613,17 @@ void procdump(void)
 
 //  Wake up one process sleeping on chan.
 //  The ptable lock must be held.
-// static void wakeup2(void *chan) {
-//   acquire(&ptable.lock);
-//   struct proc *p;
-//   for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
-//     if (p->state == SLEEPING && p->chan == chan) {
-//       p->state = RUNNABLE;
-//       break;
-//     }
-//   }
-//   release(&ptable.lock);
-// }
+static void wakeup2(void *chan) {
+  acquire(&ptable.lock);
+  struct proc *p;
+  for (p = ptable.proc; p < &ptable.proc[NPROC]; p++) {
+    if (p->state == SLEEPING && p->chan == chan) {
+      p->state = RUNNABLE;
+      break;
+    }
+  }
+  release(&ptable.lock);
+}
 
 int clone(void (*fn)(int *), int *arg, void *stack)
 {
@@ -701,9 +701,6 @@ int join(void)
 {
   // use wait as reference to implement
   // functionality of join
-  // ******************************
-  // WPTHREAD -- START
-  // ******************************
   struct proc *p;
   int havethreads, thread_id;
   struct proc *curproc = myproc();
@@ -746,51 +743,74 @@ int join(void)
 
     sleep(curproc, &ptable.lock);
   }
-  // ******************************
-  // WPTHREAD -- END
-  // ******************************
 }
 
 int semaphore_init(int v)
 {
-  // ******************************
-  // WPTHREAD -- START
-  // ******************************
+  for (int i=0; i < 16; i++) {
+    if(semaphores[i].used)
+      continue;
+
+    struct semaphore *sem = &semaphores[i];
+    acquire(&sem->lock);
+    sem->used = 1;
+    sem->value = v;
+    release(&sem->lock);
+    return i;
+  } 
   return -1;
-  // ******************************
-  // WPTHREAD -- END
-  // ******************************
 }
 
 int semaphore_destroy(int s)
 {
-  // ******************************
-  // WPTHREAD -- START
-  // ******************************
+  if (s < 0 || s > 15)
+    return -1;
+  
+  struct semaphore *sem = &semaphores[s]; 
+  acquire(&sem->lock);
+  sem->used = 0;
+  sem->value = 0;
+  release(&sem->lock);
   return 0;
-  // ******************************
-  // WPTHREAD -- END
-  // ******************************
 }
 
 int semaphore_down(int s)
 {
-  // ******************************
-  // WPTHREAD -- START
-  // ******************************
+  if (s < 0 || s > 15)
+    return -1;
+  
+  struct semaphore *sem = &semaphores[s]; 
+
+  // blocking operation by busy looping 
+  // while(1){
+  //   acquire(&sem->lock);
+  //   if (sem->value > 0){
+  //     sem->value--;
+  //     release(&sem->lock);
+  //     break;
+  //   }
+  //   release(&sem->lock);
+  // }
+
+  // blocking operation by sleep(sem, &sem->lock)
+  acquire(&sem->lock);
+  while (sem->value == 0) {
+    sleep(sem, &sem->lock);
+  }
+  sem->value--;
+  release(&sem->lock);
   return 0;
-  // ******************************
-  // WPTHREAD -- END
-  // ******************************
 }
 
 int semaphore_up(int s)
 {
-  // ******************************
-  // WPTHREAD -- START
-  // ******************************
+  if (s < 0 || s > 15)
+    return -1;
+  
+  struct semaphore *sem = &semaphores[s]; 
+  acquire(&sem->lock);
+  sem->value++;
+  wakeup2(sem);
+  release(&sem->lock);
   return 0;
-  // ******************************
-  // WPTHREAD -- END
-  // ******************************
 }

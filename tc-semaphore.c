@@ -14,6 +14,7 @@ void increment(int *thread_rank) {
     sleep(10);
     VAR = tmp;
     semaphore_up(sem);
+    // printf(1, "thread id %d\n", getpid());
     exit();
 }
 
